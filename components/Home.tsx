@@ -1,13 +1,12 @@
 'use client';
 
-import { useMemo, useState, useCallback } from 'react';
+import { useMemo, useState, useCallback, useEffect } from 'react';
 import type { Demo, Category } from '@/lib/demos';
 import PreviewModal from './PreviewModal';
-import ThemeToggle from './ThemeToggle';
 
-type Props = { demos: Demo[]; categories: Category[] };
+type Props = { demos: Demo[]; categories: Category[]; initialOpenSlug?: string };
 
-export default function Home({ demos, categories }: Props) {
+export default function Home({ demos, categories, initialOpenSlug }: Props) {
   const [activeCat, setActiveCat] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   const [openDemo, setOpenDemo] = useState<Demo | null>(null);
@@ -46,8 +45,14 @@ export default function Home({ demos, categories }: Props) {
     setOpenDemo(demo);
   }, []);
 
+  useEffect(() => {
+    if (!initialOpenSlug) return;
+    const target = demos.find((demo) => demo.slug === initialOpenSlug);
+    if (target) setOpenDemo(target);
+  }, [demos, initialOpenSlug]);
+
   return (
-    <>
+    <main className="threejs-page">
       <div className="container">
         <header className="header">
           <div className="header-badge">
@@ -56,11 +61,10 @@ export default function Home({ demos, categories }: Props) {
               <polyline points="2 17 12 22 22 17" />
               <polyline points="2 12 12 17 22 12" />
             </svg>
-            Three.js 示例集合
-            <ThemeToggle />
+            RUN · EDIT · LEARN
           </div>
-          <h1>Three.js 教程示例</h1>
-          <p>全面的 Three.js 示例集合，涵盖从入门基础到高级技术的 3D 图形编程示例。</p>
+          <h1>Three.js 互动实验室</h1>
+          <p>打开就能运行，源码可以直接修改。用 {stats.total} 个小实验理解浏览器里的 3D 图形编程。</p>
           <div className="header-stats">
             <div className="stat">
               <div className="stat-value">{stats.total}</div>
@@ -184,6 +188,6 @@ export default function Home({ demos, categories }: Props) {
           onClose={() => setOpenDemo(null)}
         />
       )}
-    </>
+    </main>
   );
 }

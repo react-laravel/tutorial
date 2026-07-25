@@ -2,10 +2,10 @@
 
 import { useEffect, useState, useCallback } from 'react';
 
-const KEY = 'threejs-gallery-theme';
+const KEY = 'dogeow-tutorial-theme';
 
 function readInitialTheme(): 'dark' | 'light' {
-  if (typeof document === 'undefined') return 'dark';
+  if (typeof document === 'undefined') return 'light';
   return document.documentElement.classList.contains('dark') ? 'dark' : 'light';
 }
 
