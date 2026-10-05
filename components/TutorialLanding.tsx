@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 export type LandingTopic = {
@@ -29,12 +30,12 @@ export type SearchItem = {
 
 type Props = {
   topics: LandingTopic[];
-  items: SearchItem[];
   tutorialCount: number;
   demoCount: number;
 };
 
-const quickSearches = ['稳妥通关', 'Blender 建模', 'Laravel 路由', 'Three.js 光照'];
+const quickSearches = ['村民', '建模', '路由', '光照'];
+const RESULT_LIMIT = 18;
 
 function scoreItem(item: SearchItem, query: string): number {
   const title = item.title.toLowerCase();
@@ -48,32 +49,75 @@ function scoreItem(item: SearchItem, query: string): number {
   return 10;
 }
 
-export default function TutorialLanding({ topics, items, tutorialCount, demoCount }: Props) {
+export default function TutorialLanding({ topics, tutorialCount, demoCount }: Props) {
+  const router = useRouter();
   const [query, setQuery] = useState('');
+  const [items, setItems] = useState<SearchItem[]>([]);
+  const [indexReady, setIndexReady] = useState(false);
+  const [cursor, setCursor] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const normalizedQuery = query.trim().toLowerCase();
 
   useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      const target = event.target as HTMLElement | null;
-      if (event.key === '/' && target?.tagName !== 'INPUT' && target?.tagName !== 'TEXTAREA') {
-        event.preventDefault();
-        inputRef.current?.focus();
-      }
+    let cancelled = false;
+    let idle = 0;
+    let timer = 0;
+    const load = () => {
+      fetch('/search-index')
+        .then((response) => {
+          if (!response.ok) throw new Error('search index failed');
+          return response.json() as Promise<SearchItem[]>;
+        })
+        .then((data) => {
+          if (cancelled) return;
+          setItems(data);
+          setIndexReady(true);
+        })
+        .catch(() => {
+          if (!cancelled) setIndexReady(true);
+        });
     };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
+    if (typeof window.requestIdleCallback === 'function') idle = window.requestIdleCallback(load);
+    else timer = window.setTimeout(load, 50);
+    return () => {
+      cancelled = true;
+      if (idle) window.cancelIdleCallback(idle);
+      if (timer) window.clearTimeout(timer);
+    };
   }, []);
 
-  const results = useMemo(() => {
+  useEffect(() => {
+    if (window.location.hash === '#search') inputRef.current?.focus();
+  }, []);
+
+  const matched = useMemo(() => {
     if (!normalizedQuery) return [];
     return items
       .map((item) => ({ item, score: scoreItem(item, normalizedQuery) }))
       .filter((result) => result.score >= 0)
       .sort((a, b) => b.score - a.score || a.item.title.localeCompare(b.item.title, 'zh-CN'))
-      .slice(0, 18)
       .map((result) => result.item);
   }, [items, normalizedQuery]);
+
+  const results = matched.slice(0, RESULT_LIMIT);
+
+  useEffect(() => {
+    setCursor(0);
+  }, [normalizedQuery]);
+
+  const onSearchKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (!results.length) return;
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      setCursor((index) => Math.min(index + 1, results.length - 1));
+    } else if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      setCursor((index) => Math.max(index - 1, 0));
+    } else if (event.key === 'Enter' && results[cursor]) {
+      event.preventDefault();
+      router.push(results[cursor].href);
+    }
+  };
 
   return (
     <main className="landing-page">
@@ -115,7 +159,12 @@ export default function TutorialLanding({ topics, items, tutorialCount, demoCoun
                 type="search"
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
+                onKeyDown={onSearchKeyDown}
                 placeholder="例如：村民交易、UV 展开、路由调度、着色器…"
+                role="combobox"
+                aria-expanded={Boolean(normalizedQuery)}
+                aria-controls="search-results"
+                aria-activedescendant={results[cursor] ? `search-result-${results[cursor].id}` : undefined}
                 autoComplete="off"
               />
               {query ? (
@@ -165,12 +214,25 @@ export default function TutorialLanding({ topics, items, tutorialCount, demoCoun
                 <span className="section-number">SEARCH</span>
                 <h2>搜索结果</h2>
               </div>
-              <p>找到 {results.length} 个最相关结果</p>
+              <p>
+                {!indexReady
+                  ? '正在准备搜索'
+                  : matched.length > results.length
+                    ? `显示前 ${results.length} 条，共 ${matched.length} 条`
+                    : `找到 ${results.length} 条`}
+              </p>
             </div>
             {results.length > 0 ? (
-              <div className="search-result-list">
-                {results.map((item) => (
-                  <Link className="search-result-card" href={item.href} key={item.id}>
+              <div className="search-result-list" id="search-results" role="listbox">
+                {results.map((item, index) => (
+                  <Link
+                    className={`search-result-card${index === cursor ? ' active' : ''}`}
+                    href={item.href}
+                    id={`search-result-${item.id}`}
+                    role="option"
+                    aria-selected={index === cursor}
+                    key={item.id}
+                  >
                     <span className="result-type">{item.type}</span>
                     <div>
                       <small>{item.topic} / {item.section}</small>
@@ -180,6 +242,11 @@ export default function TutorialLanding({ topics, items, tutorialCount, demoCoun
                     <span className="result-arrow" aria-hidden="true">↗</span>
                   </Link>
                 ))}
+              </div>
+            ) : !indexReady ? (
+              <div className="no-results">
+                <strong>正在准备搜索</strong>
+                <p>索引马上就好。</p>
               </div>
             ) : (
               <div className="no-results">

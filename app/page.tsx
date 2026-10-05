@@ -1,9 +1,6 @@
-import TutorialLanding, {
-  type LandingTopic,
-  type SearchItem,
-} from '@/components/TutorialLanding';
+import TutorialLanding, { type LandingTopic } from '@/components/TutorialLanding';
 import { demos } from '@/lib/demos';
-import { tutorialMeta } from '@/lib/tutorials';
+import { tutorialMeta } from '@/lib/tutorial-meta';
 
 export default function Page() {
   const counts = tutorialMeta.reduce<Record<string, number>>((result, document) => {
@@ -62,32 +59,9 @@ export default function Page() {
     },
   ];
 
-  const tutorialItems: SearchItem[] = tutorialMeta.map((document) => ({
-    id: document.id,
-    type: '教程',
-    title: document.title,
-    description: document.description,
-    href: `/learn/${encodeURI(document.slug)}`,
-    topic: document.topicTitle,
-    section: document.sectionTitle,
-    keywords: `${document.sourcePath} ${document.topic}`,
-  }));
-
-  const demoItems: SearchItem[] = demos.map((demo) => ({
-    id: `three:${demo.slug}`,
-    type: '示例',
-    title: demo.title,
-    description: demo.desc,
-    href: `/threejs?open=${encodeURIComponent(demo.slug)}`,
-    topic: 'Three.js 互动实验室',
-    section: demo.categories.join(' · '),
-    keywords: `${demo.slug} ${demo.features.join(' ')}`,
-  }));
-
   return (
     <TutorialLanding
       topics={topics}
-      items={[...tutorialItems, ...demoItems]}
       tutorialCount={tutorialMeta.length}
       demoCount={demos.length}
     />

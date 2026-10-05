@@ -88,6 +88,19 @@ body {
   color: var(--ink);
 }
 
+html:root body::before {
+  opacity: 0.35;
+  background-image:
+    radial-gradient(circle at 12% 18%, rgba(252, 157, 28, 0.14), transparent 34%),
+    radial-gradient(circle at 90% 8%, rgba(244, 96, 54, 0.08), transparent 28%);
+}
+
+html:root body::after {
+  opacity: 0.35;
+  background-image: radial-gradient(var(--hairline) 0.65px, transparent 0.65px);
+  background-size: 15px 15px;
+}
+
 body::before {
   opacity: 0.35;
   background-image:
@@ -260,6 +273,13 @@ a {
 }
 
 /* Landing page */
+.landing-page,
+.not-found-page,
+.threejs-page {
+  position: relative;
+  z-index: 1;
+}
+
 .landing-page {
   min-height: 100vh;
 }
@@ -416,6 +436,11 @@ a {
 
 .hero-search-box input::placeholder {
   color: color-mix(in srgb, var(--soft-ink) 75%, transparent);
+}
+
+.hero-search-box:focus-within {
+  outline: 2px solid var(--orange);
+  outline-offset: 3px;
 }
 
 .hero-search-box button {
@@ -770,7 +795,8 @@ a {
   transition: padding 0.18s ease, background 0.18s ease;
 }
 
-.search-result-card:hover {
+.search-result-card:hover,
+.search-result-card.active {
   padding-left: 18px;
   padding-right: 18px;
   background: color-mix(in srgb, var(--orange) 8%, transparent);
@@ -828,6 +854,8 @@ a {
 
 /* Tutorial reader */
 .docs-page {
+  position: relative;
+  z-index: 1;
   min-height: calc(100vh - 68px);
 }
 
@@ -839,6 +867,20 @@ a {
   justify-content: center;
   gap: 48px;
   align-items: start;
+}
+
+.course-nav-toggle {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+}
+
+.course-nav-toggle:focus-visible + label {
+  outline: 2px solid var(--orange);
+  outline-offset: 2px;
 }
 
 .docs-sidebar {
@@ -1235,8 +1277,10 @@ a {
   display: flex;
   flex-direction: column;
   gap: 2px;
+  max-height: calc(100vh - 180px);
   padding-left: 12px;
   border-left: 1px solid var(--hairline);
+  overflow: auto;
 }
 
 .article-outline a {
@@ -1261,8 +1305,36 @@ a {
   font-size: 10px;
 }
 
-.mobile-doc-nav {
+.docs-sidebar > label,
+.mobile-page-outline,
+.site-menu,
+.site-menu-button {
   display: none;
+}
+
+.mobile-page-outline > summary,
+.site-menu-button {
+  font: inherit;
+}
+
+.mobile-page-outline nav {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 46vh;
+  padding: 4px 14px 12px;
+  overflow: auto;
+}
+
+.mobile-page-outline a {
+  color: var(--soft-ink);
+  text-decoration: none;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.mobile-page-outline a.depth-three {
+  padding-left: 12px;
 }
 
 /* Existing Three.js gallery integration */
@@ -1369,6 +1441,63 @@ a {
     display: none;
   }
 
+  .site-menu-button {
+    display: inline-flex;
+    align-items: center;
+    height: 34px;
+    padding: 0 12px;
+    border: 1px solid var(--hairline);
+    border-radius: 7px;
+    background: transparent;
+    color: var(--ink);
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 700;
+  }
+
+  .site-menu.open {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    z-index: 2;
+    display: flex;
+    flex-direction: column;
+    padding: 8px 18px 14px;
+    border-bottom: 1px solid var(--hairline);
+    background: var(--paper);
+    box-shadow: 0 18px 40px rgba(29, 26, 23, 0.08);
+  }
+
+  .site-menu a {
+    padding: 12px 4px;
+    border-bottom: 1px solid var(--hairline);
+    color: var(--soft-ink);
+    text-decoration: none;
+    font-size: 14px;
+    font-weight: 700;
+  }
+
+  .site-menu a.active,
+  .site-menu a:hover {
+    color: var(--ink);
+  }
+
+  .mobile-page-outline {
+    display: block;
+    margin-bottom: 22px;
+    border: 1px solid var(--hairline);
+    border-radius: 8px;
+    background: var(--paper);
+  }
+
+  .mobile-page-outline > summary {
+    padding: 12px 14px;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 750;
+  }
+
   .docs-layout {
     grid-template-columns: 250px minmax(0, 760px);
     gap: 36px;
@@ -1455,7 +1584,7 @@ a {
   }
 
   .hero-search-box input {
-    font-size: 14px;
+    font-size: 16px;
   }
 
   .quick-searches span {
@@ -1558,33 +1687,41 @@ a {
   }
 
   .docs-sidebar {
-    display: none;
-  }
-
-  .docs-article {
-    padding: 26px 0 70px;
-  }
-
-  .mobile-doc-nav {
     display: block;
-    margin-bottom: 26px;
+    position: static;
+    height: auto;
+    margin-bottom: 8px;
+    padding: 0;
     border: 1px solid var(--hairline);
+    border-right: 0;
     border-radius: 8px;
-    background: var(--paper);
+    overflow: hidden;
   }
 
-  .mobile-doc-nav > summary {
+  .docs-sidebar > label {
+    display: block;
     padding: 12px 14px;
     cursor: pointer;
     font-size: 12px;
     font-weight: 750;
   }
 
-  .mobile-doc-nav .docs-sidebar-nav {
+  .docs-sidebar-panel {
+    display: none;
+  }
+
+  .course-nav-toggle:checked ~ .docs-sidebar-panel {
+    display: block;
     max-height: 62vh;
+    overflow: auto;
+  }
+
+  .docs-sidebar-panel .docs-sidebar-nav {
     padding: 12px;
-    border-top: 1px solid var(--hairline);
-    overflow-y: auto;
+  }
+
+  .docs-article {
+    padding: 26px 0 70px;
   }
 
   .article-breadcrumbs {
@@ -1638,5 +1775,18 @@ a {
   .site-footer small {
     display: block;
     margin: 18px 0 0 64px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  .topic-card,
+  .path-item::before,
+  .search-result-card,
+  .site-nav a::after {
+    transition: none;
   }
 }

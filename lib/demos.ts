@@ -21,18 +21,6 @@ export type Category = {
 import demosData from '@/data/demos.json';
 import categoriesData from '@/data/categories.json';
 
-function toCanonicalSlug(slug: string): string {
-  return slug.replace(/^\d+-/, '').trim().toLowerCase();
-}
-
-function getDemoPriority(demo: Demo): number {
-  let priority = 0;
-  if (!demo.autoRegistered) priority += 10;
-  if (demo.index !== null) priority += 5;
-  if (demo.features.length > 0) priority += 1;
-  return priority;
-}
-
 function compareDemos(a: Demo, b: Demo): number {
   const aIndex = a.index ?? Number.MAX_SAFE_INTEGER;
   const bIndex = b.index ?? Number.MAX_SAFE_INTEGER;
@@ -46,17 +34,12 @@ function normalizeDemos(source: Demo[]): Demo[] {
   const deduped = new Map<string, Demo>();
 
   for (const item of source) {
-    const demo: Demo = {
+    if (deduped.has(item.slug)) continue;
+    deduped.set(item.slug, {
       ...item,
       categories: [...item.categories],
       features: [...item.features],
-    };
-    const key = toCanonicalSlug(demo.slug);
-    const existing = deduped.get(key);
-
-    if (!existing || getDemoPriority(demo) > getDemoPriority(existing)) {
-      deduped.set(key, demo);
-    }
+    });
   }
 
   return Array.from(deduped.values()).sort(compareDemos);

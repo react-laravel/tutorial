@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
+import { useEffect, useRef, useState, useCallback, useMemo, useDeferredValue } from 'react';
 import hljs from 'highlight.js/lib/core';
 import javascript from 'highlight.js/lib/languages/javascript';
 import xml from 'highlight.js/lib/languages/xml';
@@ -22,10 +22,13 @@ type Props = {
 
 type CodeFile = { name: string; url: string };
 
-const DEFAULT_FILE = 'main.js';
 const JS_FALLBACK = '// 未找到源文件';
 const HTML_FALLBACK = '<!-- 未找到源文件 -->';
-const AUTO_APPLY_DELAY = 500;
+const AUTO_APPLY_DELAY = 800;
+
+function referencesMainScript(html: string): boolean {
+  return /<script\b[^>]*\bsrc=["'](?:\.\/)?main\.js(?:\?[^"']*)?["']/i.test(html);
+}
 
 function getFallbackContent(name: string): string {
   return name.endsWith('.html') || name.endsWith('.htm') ? HTML_FALLBACK : JS_FALLBACK;
@@ -92,8 +95,10 @@ export default function PreviewModal({ demo, siblings = [], onNavigate, onClose 
   const [previewApplying, setPreviewApplying] = useState(false);
   const [draftPreviewActive, setDraftPreviewActive] = useState(false);
   const [lastAppliedSignature, setLastAppliedSignature] = useState('');
-  const [activeFile, setActiveFile] = useState<string>(DEFAULT_FILE);
+  const [activeFile, setActiveFile] = useState<string>('index.html');
+  const [infoOpen, setInfoOpen] = useState(true);
   const splitRef = useRef<HTMLDivElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const paneRightRef = useRef<HTMLDivElement>(null);
   const previewUrlsRef = useRef<string[]>([]);
@@ -167,7 +172,8 @@ export default function PreviewModal({ demo, siblings = [], onNavigate, onClose 
       : draftPreviewActive
         ? '已自动预览'
         : '已同步';
-  const highlightedCode = useMemo(() => renderHighlightedCode(activeCodeText, activeLang), [activeCodeText, activeLang]);
+  const deferredCode = useDeferredValue(activeCodeText);
+  const highlightedCode = useMemo(() => renderHighlightedCode(deferredCode, activeLang), [deferredCode, activeLang]);
 
   const fetchFileText = useCallback(
     async (name: string): Promise<string> => {
@@ -210,6 +216,9 @@ export default function PreviewModal({ demo, siblings = [], onNavigate, onClose 
     body.style.width = '100%';
     documentElement.style.overflow = 'hidden';
 
+    const previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    dialogRef.current?.querySelector<HTMLElement>('[data-dialog-close]')?.focus();
+
     return () => {
       body.style.overflow = prevBodyOverflow;
       body.style.position = prevBodyPosition;
@@ -217,7 +226,13 @@ export default function PreviewModal({ demo, siblings = [], onNavigate, onClose 
       body.style.width = prevBodyWidth;
       documentElement.style.overflow = prevHtmlOverflow;
       window.scrollTo(0, scrollY);
+      previouslyFocused?.focus();
     };
+  }, []);
+
+  useEffect(() => {
+    if (!window.matchMedia('(max-width: 800px)').matches) return;
+    setInfoOpen(false);
   }, []);
 
   useEffect(() => {
@@ -241,8 +256,22 @@ export default function PreviewModal({ demo, siblings = [], onNavigate, onClose 
     setPreviewApplying(false);
     setDraftPreviewActive(false);
     setLastAppliedSignature('');
-    setActiveFile(DEFAULT_FILE);
+    let cancelled = false;
+    setActiveFile('index.html');
+    (async () => {
+      try {
+        const response = await fetch(srcUrl);
+        if (!response.ok) return;
+        const html = await response.text();
+        if (!cancelled) setActiveFile(referencesMainScript(html) ? 'main.js' : 'index.html');
+      } catch {
+        if (!cancelled) setActiveFile('index.html');
+      }
+    })();
     if (iframeRef.current) iframeRef.current.src = srcUrl;
+    return () => {
+      cancelled = true;
+    };
   }, [clearPreviewUrls, demo.slug, srcUrl]);
 
   useEffect(() => {
@@ -262,24 +291,27 @@ export default function PreviewModal({ demo, siblings = [], onNavigate, onClose 
         ...candidateFiles.filter((file) => file.name !== activeFile),
       ].filter(Boolean) as CodeFile[];
 
+      let loaded = false;
       for (const file of order) {
         const text = await fetchFileText(file.name);
+        if (cancelled || text === getFallbackContent(file.name)) continue;
         const nextCode = storedDrafts[file.name] ?? text;
-        if (!cancelled) {
-          setOriginalFiles((prevMap) =>
-            Object.prototype.hasOwnProperty.call(prevMap, file.name) ? prevMap : { ...prevMap, [file.name]: text },
-          );
-          setCodeFiles((prevMap) =>
-            Object.prototype.hasOwnProperty.call(prevMap, file.name) ? prevMap : { ...prevMap, [file.name]: nextCode },
-          );
-          if (text !== getFallbackContent(file.name) || file.name === activeFile) {
-            if (file.name !== activeFile) setActiveFile(file.name);
-            setCodeLoading(false);
-            return;
-          }
-        }
+        setOriginalFiles((prevMap) =>
+          Object.prototype.hasOwnProperty.call(prevMap, file.name) ? prevMap : { ...prevMap, [file.name]: text },
+        );
+        setCodeFiles((prevMap) =>
+          Object.prototype.hasOwnProperty.call(prevMap, file.name) ? prevMap : { ...prevMap, [file.name]: nextCode },
+        );
+        if (file.name !== activeFile) setActiveFile(file.name);
+        loaded = true;
+        break;
       }
 
+      if (!cancelled && !loaded) {
+        const fallback = getFallbackContent(activeFile);
+        setOriginalFiles((prevMap) => ({ ...prevMap, [activeFile]: fallback }));
+        setCodeFiles((prevMap) => ({ ...prevMap, [activeFile]: storedDrafts[activeFile] ?? fallback }));
+      }
       if (!cancelled) setCodeLoading(false);
     })();
 
@@ -296,11 +328,15 @@ export default function PreviewModal({ demo, siblings = [], onNavigate, onClose 
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    if (!hasDirtyFiles) {
-      window.localStorage.removeItem(draftStorageKey);
-      return;
+    try {
+      if (!hasDirtyFiles) {
+        window.localStorage.removeItem(draftStorageKey);
+        return;
+      }
+      window.localStorage.setItem(draftStorageKey, JSON.stringify(dirtyDrafts));
+    } catch {
+      // Quota and private-mode failures leave the in-memory draft intact.
     }
-    window.localStorage.setItem(draftStorageKey, JSON.stringify(dirtyDrafts));
   }, [dirtyDrafts, draftStorageKey, hasDirtyFiles]);
 
   const closeCodePanel = useCallback(() => {
@@ -471,6 +507,24 @@ export default function PreviewModal({ demo, siblings = [], onNavigate, onClose 
     [activeCodeText, activeFile],
   );
 
+  const trapTab = useCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.key !== 'Tab') return;
+    const root = dialogRef.current;
+    if (!root) return;
+    const focusable = [...root.querySelectorAll<HTMLElement>('a[href], button, textarea, input, select, [tabindex]:not([tabindex="-1"])')]
+      .filter((element) => !element.hasAttribute('disabled') && element.tabIndex !== -1);
+    if (focusable.length === 0) return;
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  }, []);
+
   const syncCodeScroll = useCallback(() => {
     const editor = editorRef.current;
     const highlight = highlightRef.current;
@@ -485,10 +539,17 @@ export default function PreviewModal({ demo, siblings = [], onNavigate, onClose 
 
   return (
     <div className="modal-backdrop" onClick={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="modal-shell">
+      <div
+        ref={dialogRef}
+        className="modal-shell"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="preview-dialog-title"
+        onKeyDown={trapTab}
+      >
         <div className="modal-header">
           <div className="modal-title">
-            <span>{demo.title}</span>
+            <span id="preview-dialog-title">{demo.title}</span>
             <code>{demo.slug}</code>
           </div>
           <div className="modal-actions">
@@ -499,7 +560,10 @@ export default function PreviewModal({ demo, siblings = [], onNavigate, onClose 
               下一个 →
             </button>
             {siblings.length > 0 && currentIndex >= 0 && <span className="nav-counter">{currentIndex + 1} / {siblings.length}</span>}
-            <button className="modal-btn" onClick={toggleCodePanel}>
+            <button type="button" className="modal-btn" onClick={() => setInfoOpen((open) => !open)} aria-pressed={infoOpen}>
+              {infoOpen ? '隐藏信息' : '示例信息'}
+            </button>
+            <button type="button" className="modal-btn" onClick={toggleCodePanel}>
               {codeOpen ? '隐藏代码' : '查看代码'}
             </button>
             <button className="modal-btn" onClick={handleReload}>
@@ -508,14 +572,14 @@ export default function PreviewModal({ demo, siblings = [], onNavigate, onClose 
             <button className="modal-btn" onClick={handleOpenNew}>
               新标签页
             </button>
-            <button className="modal-btn primary" onClick={onClose}>
+            <button type="button" className="modal-btn primary" data-dialog-close onClick={onClose}>
               关闭
             </button>
           </div>
         </div>
 
         <div className="modal-body">
-          <aside className="info-sidebar">
+          <aside className={`info-sidebar${infoOpen ? '' : ' collapsed'}`}>
             <div className="info-block">
               <span className="info-label">目录</span>
               <span className="info-value mono">{demo.slug}</span>
@@ -577,19 +641,19 @@ export default function PreviewModal({ demo, siblings = [], onNavigate, onClose 
                 </div>
                 <div className="editor-actions">
                   <span className={`editor-status${draftPreviewActive ? ' active' : ''}`}>{editorStatus}</span>
-                  <button className="code-close" onClick={() => void handleApplyDraft()} title="运行修改" disabled={codeLoading || previewApplying}>
+                  <button type="button" className="code-close" onClick={() => void handleApplyDraft()} title="运行修改" aria-label="运行修改" disabled={codeLoading || previewApplying}>
                     ▶
                   </button>
-                  <button className="code-close" onClick={handleResetFile} title="还原当前文件" disabled={!activeFileDirty}>
+                  <button type="button" className="code-close" onClick={handleResetFile} title="还原当前文件" aria-label="还原当前文件" disabled={!activeFileDirty}>
                     ↺
                   </button>
-                  <button className="code-close" onClick={handleRestorePreview} title="恢复原始预览" disabled={!draftPreviewActive}>
+                  <button type="button" className="code-close" onClick={handleRestorePreview} title="恢复原始预览" aria-label="恢复原始预览" disabled={!draftPreviewActive}>
                     ⎌
                   </button>
-                  <button className="code-close" onClick={handleCopy} title="复制当前文件">
+                  <button type="button" className="code-close" onClick={handleCopy} title="复制当前文件" aria-label="复制当前文件">
                     ⧉
                   </button>
-                  <button className="code-close" onClick={closeCodePanel} title="关闭">
+                  <button type="button" className="code-close" onClick={closeCodePanel} title="关闭代码" aria-label="关闭代码">
                     ✕
                   </button>
                 </div>

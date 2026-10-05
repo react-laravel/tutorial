@@ -76,7 +76,7 @@ function extractTitle(content, fallback) {
   return match ? cleanInlineMarkdown(match[1]) : fallback;
 }
 
-function extractDescription(content) {
+function firstDescriptionLine(content, allowLists) {
   const lines = content.split(/\r?\n/);
   let inFence = false;
 
@@ -92,18 +92,30 @@ function extractDescription(content) {
       line.startsWith('#') ||
       line.startsWith('>') ||
       line.startsWith('|') ||
-      line.startsWith('-') ||
-      /^\d+[.)]\s/.test(line) ||
       /^[-*_]{3,}$/.test(line)
     ) {
       continue;
     }
 
-    const cleaned = cleanInlineMarkdown(line);
+    let body = line;
+    if (/^[-*+]\s+/.test(line) || /^\d+[.)]\s+/.test(line)) {
+      if (!allowLists) continue;
+      body = line.replace(/^[-*+]\s+/, '').replace(/^\d+[.)]\s+/, '');
+    }
+
+    const cleaned = cleanInlineMarkdown(body);
     if (cleaned.length >= 12) return cleaned.slice(0, 150);
   }
 
-  return 'DogeOW 教程网收录的系统学习笔记。';
+  return '';
+}
+
+function extractDescription(content) {
+  return (
+    firstDescriptionLine(content, false) ||
+    firstDescriptionLine(content, true) ||
+    'DogeOW 教程网收录的系统学习笔记。'
+  );
 }
 
 function stripTitle(content) {
@@ -190,15 +202,35 @@ for (const source of sources) {
   }
 }
 
+const leadingSections = {
+  minecraft: ['简单通关'],
+};
+
+function sectionRank(document) {
+  if (document.section === 'overview' || document.sourcePath.endsWith('/README.md')) return -1;
+  const preferred = leadingSections[document.topic] || [];
+  const index = preferred.indexOf(document.section);
+  return index >= 0 ? index : 100;
+}
+
 documents.sort((a, b) => {
   const sourceOrder = sources.findIndex((source) => source.topic === a.topic) -
     sources.findIndex((source) => source.topic === b.topic);
-  return sourceOrder || collator.compare(a.sourcePath, b.sourcePath);
+  if (sourceOrder) return sourceOrder;
+  const rank = sectionRank(a) - sectionRank(b);
+  return rank || collator.compare(a.sourcePath, b.sourcePath);
 });
 
 await writeFile(
   path.join(appRoot, 'data', 'tutorials.json'),
   `${JSON.stringify(documents, null, 2)}\n`,
+  'utf8',
+);
+
+const metaDocuments = documents.map(({ content: _content, ...document }) => document);
+await writeFile(
+  path.join(appRoot, 'data', 'tutorials-meta.json'),
+  `${JSON.stringify(metaDocuments, null, 2)}\n`,
   'utf8',
 );
 

@@ -14,24 +14,29 @@ function applyTheme(theme: 'dark' | 'light'): void {
 }
 
 export default function ThemeToggle() {
-  const [theme, setTheme] = useState<'dark' | 'light'>(readInitialTheme);
+  const [theme, setTheme] = useState<'dark' | 'light' | null>(null);
 
   useEffect(() => {
-    const current = readInitialTheme();
-    if (current !== theme) setTheme(current);
-  }, [theme]);
+    setTheme(readInitialTheme());
+  }, []);
 
   const toggle = useCallback(() => {
     setTheme((prev) => {
-      const next = prev === 'dark' ? 'light' : 'dark';
+      const next = (prev ?? readInitialTheme()) === 'dark' ? 'light' : 'dark';
       applyTheme(next);
-      localStorage.setItem(KEY, next);
+      try {
+        localStorage.setItem(KEY, next);
+      } catch {
+        // Private mode and full storage can reject the write. The class still updates.
+      }
       return next;
     });
   }, []);
 
+  const label = theme === 'dark' ? '切换到浅色' : theme === 'light' ? '切换到深色' : '切换主题';
+
   return (
-    <button className="theme-toggle" onClick={toggle} title={theme === 'dark' ? '切换到浅色' : '切换到深色'} aria-label="切换主题">
+    <button className="theme-toggle" onClick={toggle} title={label} aria-label={label}>
       {theme === 'dark' ? (
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="16" height="16">
           <circle cx="12" cy="12" r="4" />

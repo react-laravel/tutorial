@@ -1,5 +1,5 @@
 import type { MetadataRoute } from 'next';
-import { tutorialMeta } from '@/lib/tutorials';
+import { tutorialMeta } from '@/lib/tutorial-meta';
 
 export default function sitemap(): MetadataRoute.Sitemap {
   const baseUrl = 'https://tutorial.dogeow.com';

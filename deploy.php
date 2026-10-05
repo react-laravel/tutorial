@@ -4,21 +4,21 @@ namespace Deployer;
 
 require 'recipe/common.php';
 
-set('application', 'threejs');
+set('application', 'tutorial');
 set('keep_releases', 1);
 set('git_tty', false);
 set('workspace_root', __DIR__);
 set('writable_mode', 'chmod');
 set('writable_recursive', true);
 set('writable_chmod_mode', '0775');
-set('verify_base_url', getenv('VERIFY_BASE_URL') ?: 'https://threejs.dogeow.com');
-set('local_healthcheck_base_url', 'http://127.0.0.1:' . (getenv('PORT') ?: '3005'));
+set('verify_base_url', getenv('VERIFY_BASE_URL') ?: 'https://tutorial.dogeow.com');
+set('local_healthcheck_base_url', 'http://127.0.0.1:' . (getenv('PORT') ?: '3014'));
 add('shared_dirs', ['logs']);
 add('writable_dirs', ['logs']);
 
 localhost('production')
-    ->set('deploy_path', getenv('DEPLOY_PATH') ?: '/var/www/threejs')
-    ->set('pm2_app', getenv('PM2_APP') ?: 'threejs');
+    ->set('deploy_path', getenv('DEPLOY_PATH') ?: '/var/www/tutorial')
+    ->set('pm2_app', getenv('PM2_APP') ?: 'tutorial');
 
 task('deploy:update_code', function () {
     $workspaceRoot = rtrim(get('workspace_root'), '/');
@@ -54,12 +54,12 @@ bash -lc '
 set -euo pipefail
 app_name="{{pm2_app}}"
 runtime_cwd="{{current_path}}"
-ecosystem_path="{{current_path}}/ecosystem.config.cjs"
+ecosystem_path="{{current_path}}/ecosystem.tutorial.config.cjs"
 pm2_untracked() { env -u RUNNER_TRACKING_ID PM2_HOME=/var/www/.pm2 pm2 "$@"; }
 if pm2_untracked info "$app_name" >/dev/null 2>&1; then
-  env -u RUNNER_TRACKING_ID PM2_HOME=/var/www/.pm2 PM2_CWD="$runtime_cwd" APP_ROOT="{{deploy_path}}" PORT="${PORT:-3005}" pm2 restart "$ecosystem_path" --only "$app_name" --update-env
+  env -u RUNNER_TRACKING_ID PM2_HOME=/var/www/.pm2 PM2_CWD="$runtime_cwd" APP_ROOT="{{deploy_path}}" PORT="${PORT:-3014}" pm2 restart "$ecosystem_path" --only "$app_name" --update-env
 else
-  env -u RUNNER_TRACKING_ID PM2_HOME=/var/www/.pm2 PM2_CWD="$runtime_cwd" APP_ROOT="{{deploy_path}}" PORT="${PORT:-3005}" pm2 start "$ecosystem_path" --only "$app_name" --update-env
+  env -u RUNNER_TRACKING_ID PM2_HOME=/var/www/.pm2 PM2_CWD="$runtime_cwd" APP_ROOT="{{deploy_path}}" PORT="${PORT:-3014}" pm2 start "$ecosystem_path" --only "$app_name" --update-env
 fi
 pm2_untracked status
 '

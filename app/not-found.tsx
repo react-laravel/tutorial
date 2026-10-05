@@ -1,4 +1,9 @@
+import type { Metadata } from 'next';
 import Link from 'next/link';
+
+export const metadata: Metadata = {
+  title: '这篇教程还不在这里',
+};
 
 export default function NotFound() {
   return (

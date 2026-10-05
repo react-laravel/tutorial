@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import ScrollActiveIntoView from '@/components/ScrollActiveIntoView';
 import type { TutorialDoc } from '@/lib/tutorials';
 
 type Props = {
@@ -21,6 +22,7 @@ export default function DocsSidebar({ current, documents }: Props) {
 
   return (
     <nav className="docs-sidebar-nav" aria-label={`${current.topicTitle} 教程目录`}>
+      <ScrollActiveIntoView />
       <div className="docs-course-label">
         <span>{current.topicTitle}</span>
         <small>{documents.length} 篇</small>
