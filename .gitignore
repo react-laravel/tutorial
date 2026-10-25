@@ -4,3 +4,6 @@ out/
 next-env.d.ts
 .DS_Store
 *.log
+
+# Production upload bundle (generated, never committed)
+.deploy-runtime/
